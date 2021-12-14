@@ -1,5 +1,3 @@
-// model.go
-
 package main
 
 import (
@@ -8,12 +6,62 @@ import (
 	// "errors"
 )
 
-
 // tom: add backticks to json
 type product struct {
 	ID    int     `json:"id"`
 	Name  string  `json:"name"`
 	Price float64 `json:"price"`
+}
+
+type storeProduct struct {
+	Name        string  `json:"name"`
+	ProductID   int     `json:"product_id"`
+	Price       float64 `json:"price"`
+	IsAvailable bool    `json:"is_available"`
+}
+
+type store struct {
+	ID          int  `json:"id"`
+	ProductID   int  `json:"product_id"`
+	IsAvailable bool `json:"is_available"`
+}
+
+func getStoreProducts(db *sql.DB, id int) ([]storeProduct, error) {
+	productsInStore := []storeProduct{}
+
+	query := `SELECT p.NAME, s.product_id, p.price, s.is_available 
+			FROM products AS p 
+			JOIN store AS s ON p.ID = s.product_id
+        	WHERE s.id = $1
+        	`
+	rows, err := db.Query(query, id)
+	if err != nil {
+		return productsInStore, err
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		var sp storeProduct
+		if err := rows.Scan(&sp.Name, &sp.ProductID, &sp.Price, &sp.IsAvailable); err != nil {
+			return productsInStore, err
+		}
+		productsInStore = append(productsInStore, sp)
+	}
+
+	return productsInStore, nil
+}
+
+func (s *store) createStore(db *sql.DB) error {
+	err := db.QueryRow(
+		"INSERT INTO store(id, product_id, is_available) VALUES($1, $2, $3) RETURNING id, product_id",
+		s.ID, s.ProductID, s.IsAvailable).Scan(&s.ID, &s.ProductID)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // tom: these are initial empty definitions

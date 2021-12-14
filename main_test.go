@@ -7,15 +7,14 @@ import (
 	// tom: for ensureTableExists
 	"log"
 
+	"bytes"
+	"encoding/json"
 	// tom: for TestEmptyTable and next functions (no go get is required"
 	"net/http"
 	// "net/url"
 	"net/http/httptest"
 	"strconv"
-	"encoding/json"
-	"bytes"
 	// "io/ioutil"
-
 )
 
 var a App
@@ -42,6 +41,7 @@ func ensureTableExists() {
 }
 
 func clearTable() {
+	a.DB.Exec("DELETE FROM store")
 	a.DB.Exec("DELETE FROM products")
 	a.DB.Exec("ALTER SEQUENCE products_id_seq RESTART WITH 1")
 }
@@ -52,8 +52,19 @@ const tableCreationQuery = `CREATE TABLE IF NOT EXISTS products
     name TEXT NOT NULL,
     price NUMERIC(10,2) NOT NULL DEFAULT 0.00,
     CONSTRAINT products_pkey PRIMARY KEY (id)
-)`
+);
 
+CREATE TABLE IF NOT EXISTS store 
+(
+	 id INT,
+	 product_id INT NOT NULL,
+	 is_available BOOLEAN DEFAULT TRUE,
+	 CONSTRAINT products_fkey FOREIGN KEY (product_id) REFERENCES products(id)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS unique_store_product
+    ON store (id, product_id);
+`
 
 // tom: next functions added later, these require more modules: net/http net/http/httptest
 func TestEmptyTable(t *testing.T) {
@@ -127,7 +138,6 @@ func TestCreateProduct(t *testing.T) {
 	}
 }
 
-
 func TestGetProduct(t *testing.T) {
 	clearTable()
 	addProducts(1)
@@ -199,4 +209,59 @@ func TestDeleteProduct(t *testing.T) {
 	req, _ = http.NewRequest("GET", "/product/1", nil)
 	response = executeRequest(req)
 	checkResponseCode(t, http.StatusNotFound, response.Code)
+}
+
+//Store test cases
+func addStore() []byte {
+	clearTable()
+	addProducts(2)
+	a.DB.Exec("INSERT INTO store(id, product_id, is_available) VALUES($1, $2, $3)", 1, 1, true)
+	a.DB.Exec("INSERT INTO store(id, product_id, is_available) VALUES($1, $2, $3)", 1, 2, false)
+
+	return []byte(`[{"name": "Product 1", "product_id": 1, "price": 10 "is_available": true},
+							{"name": "Product 2", "product_id": 2, "price": 20 "is_available": false}]`)
+}
+
+//Get store products test case
+func TestGetStoreProducts(t *testing.T) {
+	jsonStr1 := addStore()
+	req1, _ := http.NewRequest("GET", "/store/1/products", nil)
+	response1 := executeRequest(req1)
+	checkResponseCode(t, http.StatusOK, response1.Code)
+	if bytes.Compare(response1.Body.Bytes(), jsonStr1) == 0 {
+		t.Errorf("Expected list of Store; Got this -> '%v'", response1.Body.Bytes())
+	}
+}
+
+//Create Store test case
+func TestCreateStore(t *testing.T) {
+
+	clearTable()
+	addProducts(2)
+
+	//Add two products to store
+	var jsonStr1 = []byte(`[{"product_id": 1, "is_available": true},
+							{"product_id": 2, "is_available": false}]`)
+	req1, _ := http.NewRequest("POST", "/store/1", bytes.NewBuffer(jsonStr1))
+	req1.Header.Set("Content-Type", "application/json")
+	response1 := executeRequest(req1)
+	checkResponseCode(t, http.StatusCreated, response1.Code)
+
+	var jsonStrRes1 = []byte(`[{"id": 1, "product_id": 1, "is_available": true},
+							{"id": 1, "product_id": 2, "is_available": false}]`)
+	if bytes.Compare(response1.Body.Bytes(), jsonStrRes1) == 0 {
+		t.Errorf("Expected list of Store; Got this -> '%v'", response1.Body.Bytes())
+	}
+
+	//Adding same item which is already present throws Duplicate key violation error
+	var jsonStr2 = []byte(`[{"product_id": 1, "is_available": true}]`)
+	req2, _ := http.NewRequest("POST", "/store/1", bytes.NewBuffer(jsonStr2))
+	req2.Header.Set("Content-Type", "application/json")
+	response2 := executeRequest(req2)
+	checkResponseCode(t, http.StatusInternalServerError, response2.Code)
+	var m map[string]interface{}
+	json.Unmarshal(response2.Body.Bytes(), &m)
+	if m["error"] != "pq: duplicate key value violates unique constraint \"unique_store_product\"" {
+		t.Errorf("Expected Duplicate Key Violation")
+	}
 }
