@@ -7,15 +7,14 @@ import (
 	"fmt"
 	"log"
 
+	"encoding/json"
 	// tom: for route handlers
 	"net/http"
-	"encoding/json"
 	"strconv"
 
 	// tom: go get required
 	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
-
 )
 
 type App struct {
@@ -29,7 +28,7 @@ type App struct {
 // tom: added "sslmode=disable" to connection string
 func (a *App) Initialize(user, password, dbname string) {
 	connectionString :=
-		fmt.Sprintf("user=%s password=%s dbname=%s sslmode=disable", user, password, dbname)
+		fmt.Sprintf("postgres://%s:%s@localhost:5432/%s?sslmode=disable", user, password, dbname)
 
 	var err error
 	a.DB, err = sql.Open("postgres", connectionString)
@@ -37,8 +36,10 @@ func (a *App) Initialize(user, password, dbname string) {
 		log.Fatal(err)
 	}
 
-	a.Router = mux.NewRouter()
+	// check the connection
+	err = a.DB.Ping()
 
+	a.Router = mux.NewRouter()
 	// tom: this line is added after initializeRoutes is created later on
 	a.initializeRoutes()
 }
@@ -47,7 +48,7 @@ func (a *App) Initialize(user, password, dbname string) {
 // func (a *App) Run(addr string) { }
 // improved version
 func (a *App) Run(addr string) {
-	log.Fatal(http.ListenAndServe(":8010", a.Router))
+	log.Fatal(http.ListenAndServe(addr, a.Router))
 }
 
 // tom: these are added later
@@ -84,7 +85,6 @@ func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
 	w.WriteHeader(code)
 	w.Write(response)
 }
-
 
 func (a *App) getProducts(w http.ResponseWriter, r *http.Request) {
 	count, _ := strconv.Atoi(r.FormValue("count"))
@@ -165,6 +165,52 @@ func (a *App) deleteProduct(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, http.StatusOK, map[string]string{"result": "success"})
 }
 
+func (a *App) getStoreProducts(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id, err := strconv.Atoi(vars["id"])
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid Store ID")
+		return
+	}
+
+	s := []storeProduct{}
+	s, err = getStoreProducts(a.DB, id)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, s)
+}
+
+func (a *App) addProductToStore(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id, err := strconv.Atoi(vars["id"])
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid Store ID")
+		return
+	}
+
+	sp := []storeProduct{}
+	decoder := json.NewDecoder(r.Body)
+	if err := decoder.Decode(&sp); err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid request payload")
+		return
+	}
+	defer r.Body.Close()
+
+	response := []store{}
+	for _, p := range sp {
+		str := store{ID: id, ProductID: p.ProductID, IsAvailable: p.IsAvailable}
+		if err := str.addProductToStore(a.DB); err != nil {
+			respondWithError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		response = append(response, str)
+	}
+
+	respondWithJSON(w, http.StatusCreated, response)
+}
 
 func (a *App) initializeRoutes() {
 	a.Router.HandleFunc("/products", a.getProducts).Methods("GET")
@@ -172,4 +218,6 @@ func (a *App) initializeRoutes() {
 	a.Router.HandleFunc("/product/{id:[0-9]+}", a.getProduct).Methods("GET")
 	a.Router.HandleFunc("/product/{id:[0-9]+}", a.updateProduct).Methods("PUT")
 	a.Router.HandleFunc("/product/{id:[0-9]+}", a.deleteProduct).Methods("DELETE")
+	a.Router.HandleFunc("/store/{id:[0-9]+}/products", a.getStoreProducts).Methods("GET")
+	a.Router.HandleFunc("/store/{id:[0-9]+}", a.addProductToStore).Methods("POST")
 }

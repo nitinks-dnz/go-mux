@@ -1,39 +1,5 @@
-# Run the postgres server on local
-pg_ctl -D /usr/local/var/postgres start
-
-# Creating the database structure
-
-    CREATE TABLE products
-    (
-        id SERIAL,
-        name TEXT NOT NULL,
-        price NUMERIC(10,2) NOT NULL DEFAULT 0.00,
-        CONSTRAINT products_pkey PRIMARY KEY (id)
-    )
-
-# Get the required files
-
-    go get -u github.com/gorilla/mux 
-    go get -u github.com/lib/pq
-
-# Runing the application
-
-source .env
-
-go build -o go-mux.bin
-
-./go-mux.bin
-
-# Running the test
-
-go test
-
-Output : 
-
-PASS
-ok  	github.com/dunzoit/go-mux	0.038s
-
-# DIY Exercise
+#DIY 1 for Allocation new Joinees
+    To-Do -
 
     * Add a store table with store containing products
         store_id , product_id , is_available
@@ -49,3 +15,80 @@ ok  	github.com/dunzoit/go-mux	0.038s
      - Given list of products add in the store
 
     Add test cases for the above apis.
+### Get the required files
+```shell
+go get -u github.com/gorilla/mux 
+go get -u github.com/lib/pq
+```
+
+### Start the local dev setup
+Pre-requisites to this step is to have docker and docker-compose installed locally. By running the below command Postgres database will be setup locally on docker and the tables will be created along with constraints, the initial DB scripts is places in [init.sql](https://github.com/nitinks-dnz/go-mux/tree/main/db-scripts/init.sql).
+```shell
+source .env
+docker-compose start
+```
+
+### Runing the application
+```shell
+source .env
+go build -o go-mux.bin
+./go-mux.bin
+```
+
+### Running the test
+```shell
+go test run ''
+```
+    Output :
+    PASS
+    ok  	github.com/nitinks-dnz/go-mux	0.476s
+
+## New APIs added
+
+1. POST /store/{id}
+    -  Input:
+    ```json
+   [
+      {
+          "product_id": 1,
+          "is_available": true
+      },
+      {
+          "product_id": 2,
+          "is_available": false
+      }
+   ]
+    ```
+    -  Expected output:
+    ```json
+   [
+      {
+          "id": 1,
+          "product_id": 1,
+          "is_available": true
+      },
+      {
+          "id": 1,
+          "product_id": 2,
+          "is_available": false
+      }
+   ]
+    ```
+2. GET /store/{id}/products
+    - Example Output:
+    ```json
+   [
+      {
+          "name": "Product 1",
+          "product_id": 1,
+          "price": 10,
+          "is_available": true
+      },
+      {
+          "name": "Product 2",
+          "product_id": 2,
+          "price": 20,
+          "is_available": false
+      }
+   ]
+    ```
