@@ -234,7 +234,7 @@ func TestGetStoreProducts(t *testing.T) {
 }
 
 //Create Store test case
-func TestCreateStore(t *testing.T) {
+func TestAddProductToStore(t *testing.T) {
 
 	clearTable()
 	addProducts(2)
