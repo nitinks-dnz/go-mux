@@ -52,7 +52,7 @@ func getStoreProducts(db *sql.DB, id int) ([]storeProduct, error) {
 	return productsInStore, nil
 }
 
-func (s *store) createStore(db *sql.DB) error {
+func (s *store) addProductToStore(db *sql.DB) error {
 	err := db.QueryRow(
 		"INSERT INTO store(id, product_id, is_available) VALUES($1, $2, $3) RETURNING id, product_id",
 		s.ID, s.ProductID, s.IsAvailable).Scan(&s.ID, &s.ProductID)

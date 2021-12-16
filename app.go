@@ -183,17 +183,7 @@ func (a *App) getStoreProducts(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, http.StatusOK, s)
 }
 
-func (a *App) initializeRoutes() {
-	a.Router.HandleFunc("/products", a.getProducts).Methods("GET")
-	a.Router.HandleFunc("/product", a.createProduct).Methods("POST")
-	a.Router.HandleFunc("/product/{id:[0-9]+}", a.getProduct).Methods("GET")
-	a.Router.HandleFunc("/product/{id:[0-9]+}", a.updateProduct).Methods("PUT")
-	a.Router.HandleFunc("/product/{id:[0-9]+}", a.deleteProduct).Methods("DELETE")
-	a.Router.HandleFunc("/store/{id:[0-9]+}/products", a.getStoreProducts).Methods("GET")
-	a.Router.HandleFunc("/store/{id:[0-9]+}", a.createStore).Methods("POST")
-}
-
-func (a *App) createStore(w http.ResponseWriter, r *http.Request) {
+func (a *App) addProductToStore(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id, err := strconv.Atoi(vars["id"])
 	if err != nil {
@@ -212,7 +202,7 @@ func (a *App) createStore(w http.ResponseWriter, r *http.Request) {
 	response := []store{}
 	for _, p := range sp {
 		str := store{ID: id, ProductID: p.ProductID, IsAvailable: p.IsAvailable}
-		if err := str.createStore(a.DB); err != nil {
+		if err := str.addProductToStore(a.DB); err != nil {
 			respondWithError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -220,4 +210,14 @@ func (a *App) createStore(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondWithJSON(w, http.StatusCreated, response)
+}
+
+func (a *App) initializeRoutes() {
+	a.Router.HandleFunc("/products", a.getProducts).Methods("GET")
+	a.Router.HandleFunc("/product", a.createProduct).Methods("POST")
+	a.Router.HandleFunc("/product/{id:[0-9]+}", a.getProduct).Methods("GET")
+	a.Router.HandleFunc("/product/{id:[0-9]+}", a.updateProduct).Methods("PUT")
+	a.Router.HandleFunc("/product/{id:[0-9]+}", a.deleteProduct).Methods("DELETE")
+	a.Router.HandleFunc("/store/{id:[0-9]+}/products", a.getStoreProducts).Methods("GET")
+	a.Router.HandleFunc("/store/{id:[0-9]+}", a.addProductToStore).Methods("POST")
 }
